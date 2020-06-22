@@ -34,7 +34,7 @@ func (triggerChecker *TriggerChecker) Check() error {
 		}
 	}
 
-	checkData.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics)
+	checkData.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics, triggerChecker.trigger.AloneMetrics)
 	checkData, err = triggerChecker.check(preparedMetrics, aloneMetrics, checkData)
 	if err != nil {
 		return triggerChecker.handleUndefinedError(checkData, err)
@@ -210,13 +210,10 @@ func (triggerChecker *TriggerChecker) validateAloneMetrics(aloneMetrics map[stri
 		return nil
 	}
 
-	if len(aloneMetrics) != len(triggerChecker.trigger.AloneMetrics) {
-		return NewErrUnexpectedAloneMetric(triggerChecker.trigger.AloneMetrics, conversion.GetRelations(aloneMetrics))
-	}
-
-	for targetName := range conversion.GetRelations(aloneMetrics) {
-		if !triggerChecker.trigger.AloneMetrics[targetName] {
-			return NewErrUnexpectedAloneMetric(triggerChecker.trigger.AloneMetrics, conversion.GetRelations(aloneMetrics))
+	fetchedAloneMetricsTargets := conversion.GetRelations(aloneMetrics, triggerChecker.trigger.AloneMetrics)
+	for targetName := range triggerChecker.trigger.AloneMetrics {
+		if _, ok := fetchedAloneMetricsTargets[targetName]; !ok {
+			return NewErrUnexpectedAloneMetric(triggerChecker.trigger.AloneMetrics, conversion.GetRelations(aloneMetrics, triggerChecker.trigger.AloneMetrics))
 		}
 	}
 	return nil

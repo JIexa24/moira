@@ -870,7 +870,7 @@ func TestIgnoreNodataToOk(t *testing.T) {
 	}
 
 	aloneMetrics := map[string]metricSource.MetricData{"t1": *metricSource.MakeMetricData(metric, []float64{0, 1, 2, 3, 4}, retention, triggerChecker.from)}
-	triggerChecker.lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics)
+	triggerChecker.lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics, triggerChecker.trigger.AloneMetrics)
 	metricsToCheck := map[string]map[string]metricSource.MetricData{}
 	checkData := newCheckData(&lastCheck, triggerChecker.until)
 
@@ -935,7 +935,7 @@ func TestHandleTrigger(t *testing.T) {
 
 	Convey("First Event", t, func() {
 		aloneMetrics := map[string]metricSource.MetricData{"t1": *metricSource.MakeMetricData(metric, []float64{0, 1, 2, 3, 4}, retention, triggerChecker.from)}
-		lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics)
+		lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics, triggerChecker.trigger.AloneMetrics)
 		checkData := newCheckData(&lastCheck, triggerChecker.until)
 		metricsToCheck := map[string]map[string]metricSource.MetricData{}
 		dataBase.EXPECT().PushNotificationEvent(&moira.NotificationEvent{
@@ -980,7 +980,7 @@ func TestHandleTrigger(t *testing.T) {
 
 	Convey("Last check is not empty", t, func() {
 		aloneMetrics := map[string]metricSource.MetricData{"t1": *metricSource.MakeMetricData(metric, []float64{0, 1, 2, 3, 4}, retention, triggerChecker.from)}
-		lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics)
+		lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics, triggerChecker.trigger.AloneMetrics)
 		checkData := newCheckData(&lastCheck, triggerChecker.until)
 		metricsToCheck := map[string]map[string]metricSource.MetricData{}
 
@@ -1016,7 +1016,7 @@ func TestHandleTrigger(t *testing.T) {
 			Values:    map[string]float64{},
 			Message:   nil}, true).Return(nil)
 		aloneMetrics := map[string]metricSource.MetricData{"t1": *metricSource.MakeMetricData(metric, []float64{}, retention, triggerChecker.from)}
-		lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics)
+		lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics, triggerChecker.trigger.AloneMetrics)
 		checkData := newCheckData(&lastCheck, triggerChecker.until)
 		metricsToCheck := map[string]map[string]metricSource.MetricData{}
 
@@ -1048,7 +1048,7 @@ func TestHandleTrigger(t *testing.T) {
 		dataBase.EXPECT().RemovePatternsMetrics(triggerChecker.trigger.Patterns).Return(nil)
 
 		aloneMetrics := map[string]metricSource.MetricData{"t1": *metricSource.MakeMetricData(metric, []float64{}, retention, triggerChecker.from)}
-		lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics)
+		lastCheck.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics, triggerChecker.trigger.AloneMetrics)
 		checkData := newCheckData(&lastCheck, triggerChecker.until)
 		metricsToCheck := map[string]map[string]metricSource.MetricData{}
 
@@ -1344,7 +1344,7 @@ func TestTriggerChecker_validateAloneMetrics(t *testing.T) {
 				AloneMetrics: map[string]bool{},
 			},
 			aloneMetrics: map[string]metricSource.MetricData{
-				"t1": metricSource.MetricData{},
+				"t1": {},
 			},
 			wantErr: ShouldBeNil,
 		},
@@ -1355,7 +1355,7 @@ func TestTriggerChecker_validateAloneMetrics(t *testing.T) {
 				AloneMetrics: map[string]bool{"t1": true},
 			},
 			aloneMetrics: map[string]metricSource.MetricData{
-				"t1": metricSource.MetricData{},
+				"t1": {},
 			},
 			wantErr: ShouldBeNil,
 		},
@@ -1374,8 +1374,8 @@ func TestTriggerChecker_validateAloneMetrics(t *testing.T) {
 				Targets:      []string{"test.target.1.*", "test.target.2.*"},
 				AloneMetrics: map[string]bool{"t1": true},
 			},
-			aloneMetrics: map[string]metricSource.MetricData{"t1": metricSource.MetricData{}, "t2": metricSource.MetricData{}},
-			wantErr:      ShouldBeError,
+			aloneMetrics: map[string]metricSource.MetricData{"t1": {}, "t2": {}},
+			wantErr:      ShouldBeNil,
 		},
 		{
 			name: "trigger have couple targets and actual targets have less alone metrics than expected",
@@ -1383,7 +1383,7 @@ func TestTriggerChecker_validateAloneMetrics(t *testing.T) {
 				Targets:      []string{"test.target.1.*", "test.target.2.*"},
 				AloneMetrics: map[string]bool{"t1": true, "t2": true},
 			},
-			aloneMetrics: map[string]metricSource.MetricData{"t1": metricSource.MetricData{}},
+			aloneMetrics: map[string]metricSource.MetricData{"t1": {}},
 			wantErr:      ShouldBeError,
 		},
 		{
@@ -1392,7 +1392,7 @@ func TestTriggerChecker_validateAloneMetrics(t *testing.T) {
 				Targets:      []string{"test.target.1.*", "test.target.2.*"},
 				AloneMetrics: map[string]bool{"t1": true},
 			},
-			aloneMetrics: map[string]metricSource.MetricData{"t2": metricSource.MetricData{}},
+			aloneMetrics: map[string]metricSource.MetricData{"t2": {}},
 			wantErr:      ShouldBeError,
 		},
 	}
