@@ -831,6 +831,86 @@ func TestCheck(t *testing.T) {
 			err := triggerChecker.Check()
 			So(err, ShouldBeNil)
 		})
+
+		Convey("Alone metrics error", func() {
+			metricName1 := "test.metric.1"
+			metricName2 := "test.metric.2"
+			metricNameAlone := "test.metric.alone"
+			pattern1 := "target.pattern.1"
+			pattern2 := "target.pattern.2"
+			pattern3 := "target.pattern.3"
+			lastCheck := moira.CheckData{
+				Metrics: map[string]moira.MetricState{
+					metricName1: {
+						EventTimestamp:  57,
+						State:           moira.StateOK,
+						Timestamp:       57,
+						MaintenanceInfo: moira.MaintenanceInfo{},
+						Values:          map[string]float64{"t1": 1, "t2": 5, "t3": 8},
+					},
+					metricName2: {
+						EventTimestamp:  57,
+						State:           moira.StateOK,
+						Timestamp:       57,
+						MaintenanceInfo: moira.MaintenanceInfo{},
+						Values:          map[string]float64{"t1": 2, "t2": 5, "t3": 9},
+					},
+				},
+				MetricsToTargetRelation:      map[string]string{"t2": metricNameAlone},
+				Score:                        100,
+				State:                        moira.StateOK,
+				Timestamp:                    triggerChecker.until,
+				EventTimestamp:               triggerChecker.until,
+				LastSuccessfulCheckTimestamp: triggerChecker.until,
+				Message:                      "",
+			}
+			event := moira.NotificationEvent{
+				IsTriggerEvent: true,
+				TriggerID:      triggerChecker.triggerID,
+				State:          moira.StateNODATA,
+				OldState:       moira.StateOK,
+				Timestamp:      67,
+				Metric:         triggerChecker.trigger.Name,
+			}
+
+			expression := "OK"
+			triggerChecker.trigger.AloneMetrics = map[string]bool{"t2": true}
+			triggerChecker.trigger.Targets = []string{pattern1, pattern2, pattern3}
+			triggerChecker.trigger.TriggerType = moira.ExpressionTrigger
+			triggerChecker.trigger.Expression = &expression
+			triggerChecker.lastCheck = &moira.CheckData{}
+
+			gomock.InOrder(
+				source.EXPECT().Fetch(pattern1, triggerChecker.from, triggerChecker.until, false).Return(fetchResult, nil),
+				fetchResult.EXPECT().GetMetricsData().Return([]metricSource.MetricData{
+					*metricSource.MakeMetricData(metricName1, []float64{1, 1, 1, 1, 1}, retention, triggerChecker.from),
+					// *metricSource.MakeMetricData(metricName2, []float64{2, 2, 2, 2, math.NaN()}, retention, triggerChecker.from),
+				}),
+				fetchResult.EXPECT().GetPatternMetrics().Return([]string{metricName1}, nil),
+
+				// dataBase.EXPECT().GetMetricsTTLSeconds().Return(metricsTTL),
+				source.EXPECT().Fetch(pattern2, triggerChecker.from, triggerChecker.until, false).Return(fetchResult, nil),
+				fetchResult.EXPECT().GetMetricsData().Return([]metricSource.MetricData{
+					*metricSource.MakeMetricData(metricNameAlone, []float64{5, 5, 5, 5, 5}, retention, triggerChecker.from),
+				}),
+				fetchResult.EXPECT().GetPatternMetrics().Return([]string{metricNameAlone}, nil),
+
+				source.EXPECT().Fetch(pattern3, triggerChecker.from, triggerChecker.until, false).Return(fetchResult, nil),
+				fetchResult.EXPECT().GetMetricsData().Return([]metricSource.MetricData{
+					// *metricSource.MakeMetricData(metricName1, []float64{1, 1, 1, 1, math.NaN()}, retention, triggerChecker.from),
+					*metricSource.MakeMetricData(metricName2, []float64{2, 2, 2, 2, 2}, retention, triggerChecker.from),
+				}),
+				fetchResult.EXPECT().GetPatternMetrics().Return([]string{metricName2}, nil),
+
+				dataBase.EXPECT().GetMetricsTTLSeconds().Return(metricsTTL),
+				dataBase.EXPECT().RemoveMetricsValues([]string{metricName1, metricNameAlone, metricName2}, triggerChecker.until-metricsTTL).Return(nil),
+
+				dataBase.EXPECT().PushNotificationEvent(&event, true).Return(nil),
+				dataBase.EXPECT().SetTriggerLastCheck(triggerChecker.triggerID, &lastCheck, triggerChecker.trigger.IsRemote).Return(nil),
+			)
+			err := triggerChecker.Check()
+			So(err, ShouldBeNil)
+		})
 	})
 }
 
