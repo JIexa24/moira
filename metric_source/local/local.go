@@ -45,14 +45,15 @@ func (local *Local) Fetch(target string, from int64, until int64, allowRealTimeA
 		expr2, _, err := parser.ParseExpr(target)
 		if err != nil {
 			return nil, ErrParseExpr{
-				internalError: err,
+				internalError: fmt.Errorf("parser.ParseExpr %v", err),
 				target:        target,
 			}
 		}
 		patterns := expr2.Metrics()
 		metricsMap, metrics, err := getPatternsMetricData(local.dataBase, patterns, from, until, allowRealTimeAlerting)
 		if err != nil {
-			return nil, err
+			//return nil, err
+			return nil, fmt.Errorf("getPatternsMetricData: %v", err)
 		}
 		rewritten, newTargets, err := expr.RewriteExpr(expr2, from, until, metricsMap)
 		if err != nil && err != parser.ErrSeriesDoesNotExist {
@@ -76,14 +77,15 @@ func (local *Local) Fetch(target string, from int64, until int64, allowRealTimeA
 					} else {
 						err = ErrEvalExpr{
 							target:        target,
-							internalError: err,
+							internalError: fmt.Errorf("ErrEvalExpr %v", err),
 						}
 					}
 				}
 				return result, err
 			}()
 			if err != nil {
-				return nil, err
+				//return nil, err
+				return nil, fmt.Errorf("metricsData: %v", err)
 			}
 			for _, metricData := range metricsData {
 				md := *metricData

@@ -95,7 +95,7 @@ func (connector *DbConnector) SetTriggerCheckMaintenance(triggerID string, metri
 		return readingErr
 	}
 	for readingErr != redis.ErrNil {
-		var lastCheck = moira.CheckData{}
+		lastCheck := moira.CheckData{}
 		err := json.Unmarshal([]byte(lastCheckString), &lastCheck)
 		if err != nil {
 			return fmt.Errorf("failed to parse lastCheck json %s: %s", lastCheckString, err.Error())
@@ -145,8 +145,10 @@ func (connector *DbConnector) checkDataScoreChanged(triggerID string, checkData 
 	return oldScore != checkData.Score
 }
 
-var badStateTriggersKey = "moira-bad-state-triggers"
-var triggersChecksKey = "moira-triggers-checks"
+var (
+	badStateTriggersKey = "moira-bad-state-triggers"
+	triggersChecksKey   = "moira-triggers-checks"
+)
 
 func metricLastCheckKey(triggerID string) string {
 	return "moira-metric-last-check:" + triggerID

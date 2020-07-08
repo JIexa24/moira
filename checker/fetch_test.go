@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/op/go-logging"
+
 	"github.com/golang/mock/gomock"
 	"github.com/moira-alert/moira"
 	metricSource "github.com/moira-alert/moira/metric_source"
@@ -98,6 +100,7 @@ func TestFetchTriggerMetrics(t *testing.T) {
 func TestFetch(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	dataBase := mock_moira_alert.NewMockDatabase(mockCtrl)
+	logger, _ := logging.GetLogger("Test")
 	source := mock_metric_source.NewMockMetricSource(mockCtrl)
 	fetchResult := mock_metric_source.NewMockFetchResult(mockCtrl)
 	defer mockCtrl.Finish()
@@ -118,6 +121,7 @@ func TestFetch(t *testing.T) {
 		source:   source,
 		from:     from,
 		until:    until,
+		logger:   logger,
 		trigger: &moira.Trigger{
 			Targets:  []string{pattern},
 			Patterns: []string{pattern},

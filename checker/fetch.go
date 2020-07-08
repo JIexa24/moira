@@ -35,11 +35,25 @@ func (triggerChecker *TriggerChecker) fetch() (map[string][]metricSource.MetricD
 		targetIndex++ // increasing target index to have target names started from 1 instead of 0
 		fetchResult, err := triggerChecker.source.Fetch(target, triggerChecker.from, triggerChecker.until, isSimpleTrigger)
 		if err != nil {
+			id := ""
+			if triggerChecker.trigger != nil {
+				id = triggerChecker.trigger.ID
+			}
+			triggerChecker.logger.Warningf("NOVARIABLES triggerChecker.source.Fetch ID: %s, ERROR: %v, ",
+				id, err)
 			return nil, nil, err
 		}
 		metricsData := fetchResult.GetMetricsData()
 
 		metricsFetchResult, metricsErr := fetchResult.GetPatternMetrics()
+		if metricsErr != nil {
+			id := ""
+			if triggerChecker.trigger != nil {
+				id = triggerChecker.trigger.ID
+			}
+			triggerChecker.logger.Warningf("NOVARIABLES GetPatternMetrics ID: %s, ERROR: %v, ",
+				id, metricsErr)
+		}
 
 		if metricsErr == nil {
 			metricsArr = append(metricsArr, metricsFetchResult...)
@@ -48,6 +62,11 @@ func (triggerChecker *TriggerChecker) fetch() (map[string][]metricSource.MetricD
 		targetName := fmt.Sprintf("t%d", targetIndex)
 		triggerMetricsData[targetName] = metricsData
 	}
+
+	if triggerChecker.trigger.ID == "265cb2bf-e029-4df2-9836-b628c64a8373" {
+		triggerChecker.logger.Warningf("NOVARIABLES triggerMetricsData: %#v, ",triggerMetricsData)
+	}
+
 	return triggerMetricsData, metricsArr, nil
 }
 

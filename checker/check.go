@@ -19,23 +19,32 @@ const (
 // Check handle trigger and last check and write new state of trigger, if state were change then write new NotificationEvent
 func (triggerChecker *TriggerChecker) Check() error {
 	passError := false
-	triggerChecker.logger.Debugf("Checking trigger %s", triggerChecker.triggerID)
 	checkData := newCheckData(triggerChecker.lastCheck, triggerChecker.until)
+	logIfNoValues(checkData, triggerChecker.logger, triggerChecker.triggerID, "newCheckData")
 	triggerMetricsData, err := triggerChecker.fetchTriggerMetrics()
 	if err != nil {
 		return triggerChecker.handleFetchError(checkData, err)
 	}
 
+	logIfTriggerKbaGateway(triggerChecker.logger, triggerChecker.triggerID, "fetchTriggerMetrics", triggerMetricsData)
+
 	preparedMetrics, aloneMetrics, err := triggerChecker.prepareMetrics(triggerMetricsData)
 	if err != nil {
+		logIfTriggerKbaGateway(triggerChecker.logger, triggerChecker.triggerID, fmt.Sprintf("prepareMetrics ERROR: %#v", err), "")
 		passError, checkData, err = triggerChecker.handlePrepareError(checkData, err)
 		if !passError {
 			return err
 		}
 	}
 
+	logIfTriggerKbaGateway(triggerChecker.logger, triggerChecker.triggerID, "preparedMetrics", preparedMetrics)
+	logIfTriggerKbaGateway(triggerChecker.logger, triggerChecker.triggerID, "aloneMetrics", aloneMetrics)
+
 	checkData.MetricsToTargetRelation = conversion.GetRelations(aloneMetrics)
+	logIfTriggerKbaGateway(triggerChecker.logger, triggerChecker.triggerID, "checkData.MetricsToTargetRelation",
+		checkData.MetricsToTargetRelation)
 	checkData, err = triggerChecker.check(preparedMetrics, aloneMetrics, checkData)
+	logIfNoValues(checkData, triggerChecker.logger, triggerChecker.triggerID, "triggerChecker.check")
 	if err != nil {
 		return triggerChecker.handleUndefinedError(checkData, err)
 	}
@@ -51,7 +60,40 @@ func (triggerChecker *TriggerChecker) Check() error {
 		}
 	}
 	checkData.UpdateScore()
+	logIfNoValues(checkData, triggerChecker.logger, triggerChecker.triggerID, "checkData.UpdateScore()")
 	return triggerChecker.database.SetTriggerLastCheck(triggerChecker.triggerID, &checkData, triggerChecker.trigger.IsRemote)
+}
+
+func logIfTriggerKbaGateway(logger moira.Logger, trigger, prefix string, Metrics interface{}) {
+	if trigger == "265cb2bf-e029-4df2-9836-b628c64a8373" {
+		data := ""
+		switch m := Metrics.(type) {
+		case map[string][]metricSource.MetricData:
+			data = fmt.Sprintf("%#v", m)
+		case map[string]map[string]metricSource.MetricData:
+			data = fmt.Sprintf("%#v", m)
+		case map[string]moira.MetricState:
+			data = fmt.Sprintf("%#v", m)
+		case moira.MetricState:
+			data = fmt.Sprintf("%#v", m)
+		case map[string]metricSource.MetricData:
+			data = fmt.Sprintf("%#v", m)
+		default:
+			data = fmt.Sprintf("default %#v", m)
+		}
+
+		logger.Warningf(" FINDNOVALUES TRIGGER:%s, PREFIX:%s, DATA:%s", trigger, prefix, data)
+	}
+}
+
+func logIfNoValues(data moira.CheckData, logger moira.Logger, trigger, prefix string) {
+	if len(data.Metrics) > 0 {
+		for target, metric := range data.Metrics {
+			if len(metric.Values) == 0 {
+				logIfTriggerKbaGateway(logger, trigger, prefix+" values no exists", target)
+			}
+		}
+	}
 }
 
 // handlePrepareError is a function that checks error returned from prepareMetrics function. If error
@@ -135,7 +177,6 @@ func formatTriggerCheckException(triggerId string, err error) string {
 // Set new last check timestamp that equal to "until" targets fetch interval
 // Do not copy message, it will be set if needed
 func newCheckData(lastCheck *moira.CheckData, checkTimeStamp int64) moira.CheckData {
-
 	lastMetrics := make(map[string]moira.MetricState, len(lastCheck.Metrics))
 	for k, v := range lastCheck.Metrics {
 		lastMetrics[k] = v
