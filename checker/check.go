@@ -66,6 +66,7 @@ func (triggerChecker *TriggerChecker) handlePrepareError(checkData moira.CheckDa
 	case ErrUnexpectedAloneMetric:
 		checkData.State = moira.StateEXCEPTION
 		checkData.Message = err.Error()
+		triggerChecker.logger.Warning(formatTriggerCheckException(triggerChecker.triggerID, err))
 	default:
 		return false, checkData, triggerChecker.handleUndefinedError(checkData, err)
 	}
@@ -75,13 +76,13 @@ func (triggerChecker *TriggerChecker) handlePrepareError(checkData moira.CheckDa
 		return false, checkData, err
 	}
 	checkData.UpdateScore()
-	return true, checkData, triggerChecker.database.SetTriggerLastCheck(triggerChecker.triggerID, &checkData, triggerChecker.trigger.IsRemote)
+	return false, checkData, triggerChecker.database.SetTriggerLastCheck(triggerChecker.triggerID, &checkData, triggerChecker.trigger.IsRemote)
 }
 
 // handleFetchError is a function that checks error returned from fetchTriggerMetrics function.
 func (triggerChecker *TriggerChecker) handleFetchError(checkData moira.CheckData, err error) error {
 	switch err.(type) {
-	case ErrTargetHasNoMetrics, ErrTriggerHasOnlyWildcards:
+	case ErrTriggerHasEmptyTargets, ErrTriggerHasOnlyWildcards:
 		triggerChecker.logger.Debugf("Trigger %s: %s", triggerChecker.triggerID, err.Error())
 		triggerState := triggerChecker.ttlState.ToTriggerState()
 		checkData.State = triggerState
@@ -99,11 +100,11 @@ func (triggerChecker *TriggerChecker) handleFetchError(checkData moira.CheckData
 			checkData.Message = fmt.Sprintf("Remote server unavailable. Trigger is not checked for %d seconds", timeSinceLastSuccessfulCheck)
 			checkData, err = triggerChecker.compareTriggerStates(checkData)
 		}
-		triggerChecker.logger.Errorf("Trigger %s: %s", triggerChecker.triggerID, err.Error())
+		triggerChecker.logger.Warning(formatTriggerCheckException(triggerChecker.triggerID, err))
 	case local.ErrUnknownFunction, local.ErrEvalExpr:
 		checkData.State = moira.StateEXCEPTION
 		checkData.Message = err.Error()
-		triggerChecker.logger.Warningf("Trigger %s: %s", triggerChecker.triggerID, err.Error())
+		triggerChecker.logger.Warning(formatTriggerCheckException(triggerChecker.triggerID, err))
 	default:
 		return triggerChecker.handleUndefinedError(checkData, err)
 	}
@@ -125,6 +126,10 @@ func (triggerChecker *TriggerChecker) handleUndefinedError(checkData moira.Check
 	}
 	checkData.UpdateScore()
 	return triggerChecker.database.SetTriggerLastCheck(triggerChecker.triggerID, &checkData, triggerChecker.trigger.IsRemote)
+}
+
+func formatTriggerCheckException(triggerId string, err error) string {
+	return fmt.Sprintf("TriggerCheckException %T Trigger %s: %v", err, triggerId, err)
 }
 
 // Set new last check timestamp that equal to "until" targets fetch interval
@@ -319,9 +324,18 @@ func (triggerChecker *TriggerChecker) getMetricStepsStates(metricName string, me
 
 	current = make([]moira.MetricState, 0)
 
+	// DO NOT CHANGE
+	// Specific optimization magic
 	previousState := last
-	for valueTimestamp := startTime; valueTimestamp < triggerChecker.until+stepTime; valueTimestamp += stepTime {
-		metricNewState, err := triggerChecker.getMetricDataState(metricName, metrics, previousState, valueTimestamp, checkPoint)
+	difference := moira.MaxInt64(checkPoint-startTime, 0)
+	stepsDifference := difference / stepTime
+	if (difference % stepTime) > 0 {
+		stepsDifference++
+	}
+	valueTimestamp := startTime + stepTime*stepsDifference
+	endTimestamp := triggerChecker.until + stepTime
+	for ; valueTimestamp < endTimestamp; valueTimestamp += stepTime {
+		metricNewState, err := triggerChecker.getMetricDataState(&metricName, &metrics, &previousState, &valueTimestamp, &checkPoint)
 		if err != nil {
 			return last, current, err
 		}
@@ -334,8 +348,8 @@ func (triggerChecker *TriggerChecker) getMetricStepsStates(metricName string, me
 	return last, current, nil
 }
 
-func (triggerChecker *TriggerChecker) getMetricDataState(metricName string, metrics map[string]metricSource.MetricData, lastState moira.MetricState, valueTimestamp, checkPoint int64) (*moira.MetricState, error) {
-	if valueTimestamp <= checkPoint {
+func (triggerChecker *TriggerChecker) getMetricDataState(metricName *string, metrics *map[string]metricSource.MetricData, lastState *moira.MetricState, valueTimestamp, checkPoint *int64) (*moira.MetricState, error) {
+	if *valueTimestamp <= *checkPoint {
 		return nil, nil
 	}
 	triggerExpression, values, noEmptyValues := getExpressionValues(metrics, valueTimestamp)
@@ -356,23 +370,23 @@ func (triggerChecker *TriggerChecker) getMetricDataState(metricName string, metr
 	}
 
 	return newMetricState(
-		lastState,
+		*lastState,
 		expressionState,
-		valueTimestamp,
+		*valueTimestamp,
 		values,
 	), nil
 }
 
-func getExpressionValues(metrics map[string]metricSource.MetricData, valueTimestamp int64) (*expression.TriggerExpression, map[string]float64, bool) {
+func getExpressionValues(metrics *map[string]metricSource.MetricData, valueTimestamp *int64) (*expression.TriggerExpression, map[string]float64, bool) {
 	expression := &expression.TriggerExpression{
-		AdditionalTargetsValues: make(map[string]float64, len(metrics)-1),
+		AdditionalTargetsValues: make(map[string]float64, len(*metrics)-1),
 	}
-	values := make(map[string]float64, len(metrics))
+	values := make(map[string]float64, len(*metrics))
 
-	for i := 0; i < len(metrics); i++ {
+	for i := 0; i < len(*metrics); i++ {
 		targetName := fmt.Sprintf("t%d", i+1)
-		metric := metrics[targetName]
-		value := metric.GetTimestampValue(valueTimestamp)
+		metric := (*metrics)[targetName]
+		value := metric.GetTimestampValue(*valueTimestamp)
 		values[targetName] = value
 		if !moira.IsValidFloat64(value) {
 			return expression, values, false

@@ -17,6 +17,9 @@ import (
 
 var targetNameRegex = regexp.MustCompile("t(\\d+)")
 
+// TODO(litleleprikon): Remove after https://github.com/moira-alert/moira/issues/550 will be resolved
+var asteriskPattern = "*"
+
 type TriggersList struct {
 	Page  *int64               `json:"page,omitempty"`
 	Size  *int64               `json:"size,omitempty"`
@@ -110,6 +113,7 @@ func CreateTriggerModel(trigger *moira.Trigger) TriggerModel {
 		Patterns:       trigger.Patterns,
 		IsRemote:       trigger.IsRemote,
 		MuteNewMetrics: trigger.MuteNewMetrics,
+		AloneMetrics:   trigger.AloneMetrics,
 	}
 }
 
@@ -160,13 +164,20 @@ func (trigger *Trigger) Bind(request *http.Request) error {
 		return api.ErrInvalidRequestContent{ValidationError: err}
 	}
 
-	if err := resolvePatterns(request, trigger, &triggerExpression, metricsSource); err != nil {
+	metricsDataNames, err := resolvePatterns(trigger, &triggerExpression, metricsSource)
+	if err != nil {
 		return err
 	}
+	// TODO(litleleprikon): Remove after https://github.com/moira-alert/moira/issues/550 will be resolved
+	for _, pattern := range trigger.Patterns {
+		if pattern == asteriskPattern {
+			return api.ErrInvalidRequestContent{ValidationError: fmt.Errorf("pattern \"*\" is not allowed to use")}
+		}
+	}
+	middleware.SetTimeSeriesNames(request, metricsDataNames)
 	if _, err := triggerExpression.Evaluate(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -183,7 +194,7 @@ func checkTTLSanity(trigger *Trigger, metricsSource metricSource.MetricSource) e
 	return nil
 }
 
-func resolvePatterns(request *http.Request, trigger *Trigger, expressionValues *expression.TriggerExpression, metricsSource metricSource.MetricSource) error {
+func resolvePatterns(trigger *Trigger, expressionValues *expression.TriggerExpression, metricsSource metricSource.MetricSource) (map[string]bool, error) {
 	now := time.Now().Unix()
 	targetNum := 1
 	trigger.Patterns = make([]string, 0)
@@ -192,7 +203,7 @@ func resolvePatterns(request *http.Request, trigger *Trigger, expressionValues *
 	for _, tar := range trigger.Targets {
 		fetchResult, err := metricsSource.Fetch(tar, now-600, now, false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		targetPatterns, err := fetchResult.GetPatterns()
 		if err == nil {
@@ -201,17 +212,16 @@ func resolvePatterns(request *http.Request, trigger *Trigger, expressionValues *
 
 		if targetNum == 1 {
 			expressionValues.MainTargetValue = 42
-			for _, metricData := range fetchResult.GetMetricsData() {
-				metricsDataNames[metricData.Name] = true
-			}
 		} else {
 			targetName := fmt.Sprintf("t%v", targetNum)
 			expressionValues.AdditionalTargetsValues[targetName] = 42
 		}
+		for _, metricData := range fetchResult.GetMetricsData() {
+			metricsDataNames[metricData.Name] = true
+		}
 		targetNum++
 	}
-	middleware.SetTimeSeriesNames(request, metricsDataNames)
-	return nil
+	return metricsDataNames, nil
 }
 
 func checkWarnErrorExpression(trigger *Trigger) error {

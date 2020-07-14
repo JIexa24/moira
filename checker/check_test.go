@@ -59,15 +59,19 @@ func TestGetMetricDataState(t *testing.T) {
 		Suppressed:  true,
 	}
 
+	var valueTimestamp int64 = 37
+	var checkPoint int64 = 47
 	Convey("Checkpoint more than valueTimestamp", t, func() {
-		metricState, err := triggerChecker.getMetricDataState(metricName, metrics, metricLastState, 37, 47)
+		metricState, err := triggerChecker.getMetricDataState(&metricName, &metrics, &metricLastState, &valueTimestamp, &checkPoint)
 		So(err, ShouldBeNil)
 		So(metricState, ShouldBeNil)
 	})
 
 	Convey("Checkpoint lover than valueTimestamp", t, func() {
 		Convey("Has all value by eventTimestamp step", func() {
-			metricState, err := triggerChecker.getMetricDataState(metricName, metrics, metricLastState, 42, 27)
+			var valueTimestamp int64 = 42
+			var checkPoint int64 = 27
+			metricState, err := triggerChecker.getMetricDataState(&metricName, &metrics, &metricLastState, &valueTimestamp, &checkPoint)
 			So(err, ShouldBeNil)
 			So(metricState, ShouldResemble, &moira.MetricState{
 				State:          moira.StateOK,
@@ -80,19 +84,25 @@ func TestGetMetricDataState(t *testing.T) {
 		})
 
 		Convey("No value in main metric data by eventTimestamp step", func() {
-			metricState, err := triggerChecker.getMetricDataState(metricName, metrics, metricLastState, 66, 11)
+			var valueTimestamp int64 = 66
+			var checkPoint int64 = 11
+			metricState, err := triggerChecker.getMetricDataState(&metricName, &metrics, &metricLastState, &valueTimestamp, &checkPoint)
 			So(err, ShouldBeNil)
 			So(metricState, ShouldBeNil)
 		})
 
 		Convey("IsAbsent in main metric data by eventTimestamp step", func() {
-			metricState, err := triggerChecker.getMetricDataState(metricName, metrics, metricLastState, 29, 11)
+			var valueTimestamp int64 = 29
+			var checkPoint int64 = 11
+			metricState, err := triggerChecker.getMetricDataState(&metricName, &metrics, &metricLastState, &valueTimestamp, &checkPoint)
 			So(err, ShouldBeNil)
 			So(metricState, ShouldBeNil)
 		})
 
 		Convey("No value in additional metric data by eventTimestamp step", func() {
-			metricState, err := triggerChecker.getMetricDataState(metricName, metrics, metricLastState, 26, 11)
+			var valueTimestamp int64 = 26
+			var checkPoint int64 = 11
+			metricState, err := triggerChecker.getMetricDataState(&metricName, &metrics, &metricLastState, &valueTimestamp, &checkPoint)
 			So(err, ShouldBeNil)
 			So(metricState, ShouldBeNil)
 		})
@@ -101,7 +111,9 @@ func TestGetMetricDataState(t *testing.T) {
 	Convey("No warn and error value with default expression", t, func() {
 		triggerChecker.trigger.WarnValue = nil
 		triggerChecker.trigger.ErrorValue = nil
-		metricState, err := triggerChecker.getMetricDataState(metricName, metrics, metricLastState, 42, 27)
+		var valueTimestamp int64 = 42
+		var checkPoint int64 = 27
+		metricState, err := triggerChecker.getMetricDataState(&metricName, &metrics, &metricLastState, &valueTimestamp, &checkPoint)
 		So(err.Error(), ShouldResemble, "error value and warning value can not be empty")
 		So(metricState, ShouldBeNil)
 	})
@@ -1235,22 +1247,26 @@ func TestGetExpressionValues(t *testing.T) {
 			}
 			expectedValues := map[string]float64{"t1": 0}
 
-			expression, values, noEmptyValues := getExpressionValues(metrics, 17)
+			var valueTimestamp int64 = 17
+			expression, values, noEmptyValues := getExpressionValues(&metrics, &valueTimestamp)
 			So(noEmptyValues, ShouldBeTrue)
 			So(expression, ShouldResemble, expectedExpression)
 			So(values, ShouldResemble, expectedValues)
 		})
 		Convey("last value is empty", func() {
-			_, _, noEmptyValues := getExpressionValues(metrics, 67)
+			var valueTimestamp int64 = 67
+			_, _, noEmptyValues := getExpressionValues(&metrics, &valueTimestamp)
 			So(noEmptyValues, ShouldBeFalse)
 		})
 		Convey("value before first value", func() {
-			_, _, noEmptyValues := getExpressionValues(metrics, 11)
+			var valueTimestamp int64 = 11
+			_, _, noEmptyValues := getExpressionValues(&metrics, &valueTimestamp)
 			So(noEmptyValues, ShouldBeFalse)
 		})
 
 		Convey("value in the middle is empty ", func() {
-			_, _, noEmptyValues := getExpressionValues(metrics, 44)
+			var valueTimestamp int64 = 44
+			_, _, noEmptyValues := getExpressionValues(&metrics, &valueTimestamp)
 			So(noEmptyValues, ShouldBeFalse)
 		})
 
@@ -1261,7 +1277,8 @@ func TestGetExpressionValues(t *testing.T) {
 			}
 			expectedValues := map[string]float64{"t1": 3}
 
-			expression, values, noEmptyValues := getExpressionValues(metrics, 53)
+			var valueTimestamp int64 = 53
+			expression, values, noEmptyValues := getExpressionValues(&metrics, &valueTimestamp)
 			So(noEmptyValues, ShouldBeTrue)
 			So(expression, ShouldResemble, expectedExpression)
 			So(values, ShouldResemble, expectedValues)
@@ -1289,19 +1306,22 @@ func TestGetExpressionValues(t *testing.T) {
 		}
 
 		Convey("t1 value in the middle is empty ", func() {
-			_, _, noEmptyValues := getExpressionValues(metrics, 29)
+			var valueTimestamp int64 = 29
+			_, _, noEmptyValues := getExpressionValues(&metrics, &valueTimestamp)
 			So(noEmptyValues, ShouldBeFalse)
 		})
 
 		Convey("t1 and t2 values in the middle is empty ", func() {
-			_, _, noEmptyValues := getExpressionValues(metrics, 42)
+			var valueTimestamp int64 = 42
+			_, _, noEmptyValues := getExpressionValues(&metrics, &valueTimestamp)
 			So(noEmptyValues, ShouldBeFalse)
 		})
 
 		Convey("both first values is valid ", func() {
 			expectedValues := map[string]float64{"t1": 0, "t2": 4}
 
-			expression, values, noEmptyValues := getExpressionValues(metrics, 17)
+			var valueTimestamp int64 = 17
+			expression, values, noEmptyValues := getExpressionValues(&metrics, &valueTimestamp)
 			So(noEmptyValues, ShouldBeTrue)
 			So(expression.MainTargetValue, ShouldBeIn, []float64{0, 4})
 			So(values, ShouldResemble, expectedValues)
@@ -1386,5 +1406,64 @@ func TestTriggerChecker_validateAloneMetrics(t *testing.T) {
 				So(err, tt.wantErr)
 			})
 		}
+	})
+}
+
+func TestTriggerChecker_handlePrepareError(t *testing.T) {
+	Convey("Test handlePrepareError", t, func() {
+		mockCtrl := gomock.NewController(t)
+		dataBase := mock_moira_alert.NewMockDatabase(mockCtrl)
+		logger, _ := logging.GetLogger("Test")
+
+		trigger := &moira.Trigger{}
+		triggerChecker := TriggerChecker{
+			triggerID: "test trigger",
+			trigger:   trigger,
+			database:  dataBase,
+			logger:    logger,
+		}
+		checkData := moira.CheckData{}
+
+		Convey("with ErrTriggerHasSameMetricNames", func() {
+			err := ErrTriggerHasSameMetricNames{}
+			pass, checkDataReturn, errReturn := triggerChecker.handlePrepareError(checkData, err)
+			So(errReturn, ShouldBeNil)
+			So(pass, ShouldBeTrue)
+			So(checkDataReturn, ShouldResemble, moira.CheckData{
+				State:   moira.StateERROR,
+				Message: err.Error(),
+			})
+		})
+		Convey("with ErrUnexpectedAloneMetric", func() {
+			err := ErrUnexpectedAloneMetric{
+				expected: map[string]bool{"t1": true},
+				actual:   map[string]string{"t2": "test.metric.name"},
+			}
+			triggerChecker.lastCheck = &moira.CheckData{
+				State:          moira.StateOK,
+				EventTimestamp: 10,
+			}
+			expectedCheckData := moira.CheckData{
+				Score:           100000,
+				State:           moira.StateEXCEPTION,
+				SuppressedState: moira.StateOK,
+				Suppressed:      true,
+				Message:         err.Error(),
+			}
+			dataBase.EXPECT().PushNotificationEvent(&moira.NotificationEvent{
+				IsTriggerEvent:   true,
+				TriggerID:        triggerChecker.triggerID,
+				State:            moira.StateERROR,
+				OldState:         getEventOldState(moira.StateOK, "", false),
+				Timestamp:        10,
+				Metric:           triggerChecker.trigger.Name,
+				MessageEventInfo: nil,
+			}, true)
+			dataBase.EXPECT().SetTriggerLastCheck("test trigger", &expectedCheckData, false)
+			pass, checkDataReturn, errReturn := triggerChecker.handlePrepareError(checkData, err)
+			So(errReturn, ShouldBeNil)
+			So(pass, ShouldBeFalse)
+			So(checkDataReturn, ShouldResemble, expectedCheckData)
+		})
 	})
 }

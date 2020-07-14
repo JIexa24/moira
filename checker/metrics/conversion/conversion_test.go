@@ -84,7 +84,17 @@ func TestMetricName(t *testing.T) {
 					"t2": metricSource.MetricData{Name: "metric.test.1"},
 				},
 			},
-			want: "metric.test.1",
+			want: "metric.test.2",
+		},
+		{
+			name: "origin is not empty, metrics have different names and there is no t1",
+			args: args{
+				metrics: map[string]metricSource.MetricData{
+					"t2": metricSource.MetricData{Name: "metric.test.2"},
+					"t3": metricSource.MetricData{Name: "metric.test.1"},
+				},
+			},
+			want: "",
 		},
 	}
 	Convey("MetricName", t, func() {
@@ -251,6 +261,59 @@ func TestHasOnlyWildcards(t *testing.T) {
 			Convey(tt.name, func() {
 				actual := HasOnlyWildcards(tt.args.metrics)
 				So(actual, ShouldResemble, tt.want)
+			})
+		}
+	})
+}
+
+func TestHasEmptyTargets(t *testing.T) {
+	type args struct {
+		metrics map[string][]metricSource.MetricData
+	}
+	tests := []struct {
+		name  string
+		args  args
+		want  bool
+		want1 []string
+	}{
+		{
+			name: "all targets not empty",
+			args: args{
+				metrics: map[string][]metricSource.MetricData{
+					"t1": {
+						{Name: "metric.test.1"},
+						{Name: "metric.test.2"},
+					},
+					"t2": {
+						{Name: "metric.test.1"},
+						{Name: "metric.test.2"},
+					},
+				},
+			},
+			want:  false,
+			want1: []string{},
+		},
+		{
+			name: "one target is empty",
+			args: args{
+				metrics: map[string][]metricSource.MetricData{
+					"t1": {
+						{Name: "metric.test.1"},
+						{Name: "metric.test.2"},
+					},
+					"t2": {},
+				},
+			},
+			want:  true,
+			want1: []string{"t2"},
+		},
+	}
+	Convey("HasEmptyTargets", t, func() {
+		for _, tt := range tests {
+			Convey(tt.name, func() {
+				got, got1 := HasEmptyTargets(tt.args.metrics)
+				So(got, ShouldResemble, tt.want)
+				So(got1, ShouldResemble, tt.want1)
 			})
 		}
 	})

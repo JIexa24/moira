@@ -2,6 +2,7 @@ package checker
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -41,14 +42,14 @@ func (err ErrTriggerHasSameMetricNames) Error() string {
 	return builder.String()
 }
 
-// ErrTargetHasNoMetrics used if additional trigger target has not metrics data after fetch from source
-type ErrTargetHasNoMetrics struct {
-	targetIndex int
+// ErrTriggerHasEmptyTargets used if additional trigger target has not metrics data after fetch from source
+type ErrTriggerHasEmptyTargets struct {
+	targets []string
 }
 
-// ErrTargetHasNoMetrics implementation with constant error message
-func (err ErrTargetHasNoMetrics) Error() string {
-	return fmt.Sprintf("target t%v has no metrics", err.targetIndex+1)
+// ErrTriggerHasEmptyTargets implementation with error message
+func (err ErrTriggerHasEmptyTargets) Error() string {
+	return fmt.Sprintf("target t%v has no metrics", strings.Join(err.targets, ", "))
 }
 
 // ErrUnexpectedAloneMetric is an error that fired by checker if alone metrics do not
@@ -70,17 +71,62 @@ func NewErrUnexpectedAloneMetric(expected map[string]bool, actual map[string]str
 func (err ErrUnexpectedAloneMetric) Error() string {
 	var builder strings.Builder
 
-	builder.WriteString("Unexpected to have some targets with only one pattern.\nExpected targets with only one pattern:\n")
+	builder.WriteString("Unexpected to have some targets with only one metric.\n")
+	builder.WriteString("Expected targets with only one metric:")
+	expectedArray := make([]string, 0, len(err.expected))
 	for targetName := range err.expected {
-		builder.WriteString(targetName)
-		builder.WriteRune('\n')
+		expectedArray = append(expectedArray, targetName)
 	}
-	builder.WriteString("Actual targets with only one pattern:\n")
-	for targetName, patternName := range err.actual {
+	sort.Strings(expectedArray)
+	for i, targetName := range expectedArray {
+		if i > 0 {
+			builder.WriteRune(',')
+		}
+		builder.WriteRune(' ')
 		builder.WriteString(targetName)
-		builder.WriteRune('-')
-		builder.WriteString(patternName)
+	}
+	builder.WriteRune('\n')
+
+	builder.WriteString("Actual targets with only one metric:")
+	actualArray := make([]string, 0, len(err.actual))
+	for targetName := range err.actual {
+		actualArray = append(actualArray, targetName)
+	}
+	sort.Strings(actualArray)
+	for _, targetName := range actualArray {
 		builder.WriteRune('\n')
+		builder.WriteRune('\t')
+		builder.WriteString(targetName)
+		builder.WriteString(" — ")
+		builder.WriteString(err.actual[targetName])
+	}
+
+	addColon := false
+	for _, targetName := range actualArray {
+		if _, ok := err.expected[targetName]; !ok {
+			if addColon {
+				builder.WriteRune(',')
+			} else {
+				builder.WriteString("\n\nProbably you want to set \"Single\" flag for following targets:")
+			}
+			builder.WriteRune(' ')
+			builder.WriteString(targetName)
+			addColon = true
+		}
+	}
+
+	addColon = false
+	for _, targetName := range expectedArray {
+		if _, ok := err.actual[targetName]; !ok {
+			if addColon {
+				builder.WriteRune(',')
+			} else {
+				builder.WriteString("\n\nProbably you want to switch off \"Single\" flag for following targets:")
+			}
+			builder.WriteRune(' ')
+			builder.WriteString(targetName)
+			addColon = true
+		}
 	}
 
 	return builder.String()
