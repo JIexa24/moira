@@ -109,6 +109,10 @@ type NotificationEvents []NotificationEvent
 
 func (trigger *TriggerData) PopulatedDescription(events NotificationEvents) error {
 	description, err := templating.Populate(trigger.Name, trigger.Desc, NotificationEventsToTemplatingEvents(events))
+	if err != nil {
+		description = trigger.Desc + "\n\nDescription has problems, correct your templates:\n" + err.Error()
+	}
+
 	trigger.Desc = description
 
 	return err
